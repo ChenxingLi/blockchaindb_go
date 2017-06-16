@@ -24,7 +24,7 @@ type TxList []*pb.Transaction
 
 func newMiner() *Miner {
 	var miner Miner
-	miner.longest = nil
+	miner.longest = blockchain.longest
 	miner.miningTxs = TxList{}
 	miner.uuidmap = make(map[string]bool)
 
@@ -109,7 +109,6 @@ func (self *Miner) update(log *logging.Logger) bool {
 	} else {
 		log.Debugf("[    ]Pending list length: %d, do not need filter", pendingTxs.data.Len())
 	}
-
 
 	self.miningTxs = make([]*pb.Transaction, 0, blockLimit/8)
 	self.insertTxs(pendingTxs.data, log) //Rebuild miningTx using pending
@@ -201,10 +200,10 @@ func (self *Miner) run_minter(out chan string) {
 				log.Error("Self Block Wrong:", err)
 			}
 		} else if GetHashString(js) != GetFastHashString(js) {
-			log.Warning("Oracle is not sha256, change")
+			log.Error("Oracle is not sha256, change")
 			sha256o = false
 		} else {
-			log.Error("Invalid json")
+			log.Errorf("Invalid hash: %s", GetHashString(js))
 		}
 	}
 }
@@ -230,7 +229,7 @@ func mine(in chan string, out chan string, alarm Notification, i int) {
 		}
 		//log.Warning("tick")
 
-		if currentJS == "" {
+		if currentJS == "" || len(currentJS) == 0{
 			log.Debug("Miner Slave sleep")
 			alarm.sleep()
 			log.Debug("Miner Slave wake up")
@@ -248,6 +247,7 @@ func mine(in chan string, out chan string, alarm Notification, i int) {
 					answer := currentJS + fmt.Sprintf("%01d%03d%04d\"}", i, j, k)
 					out <- answer
 					currentJS = ""
+					break
 				}
 			}
 		}

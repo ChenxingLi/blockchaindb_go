@@ -44,17 +44,18 @@ func (self *PendingTransactions) loadfromDisk() {
 	txs := loadTransactions()
 	log.Info("Load Pending Tx")
 
-	log.Debug("[wait]Tx data lock")
-	self.dataLock.Lock()
-	log.Debug("[lock]Tx data lock")
+	//log.Debug("[wait]Tx data lock")
+	//self.dataLock.Lock()
+	//log.Debug("[lock]Tx data lock")
 
 	self.data = txs
 	for e:= self.data.Front(); e!=nil; e=e.Next() {
 		tx := e.Value.(*pb.Transaction)
 		self.uuidmap[tx.UUID] = true
 	}
-	self.dataLock.Unlock()
-	log.Debug("[rels]Tx data lock")
+	//self.dataLock.Unlock()
+	miner.insertTxs(self.data, log)
+	//log.Debug("[rels]Tx data lock")
 
 }
 

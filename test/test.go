@@ -165,10 +165,10 @@ func BasicTest() {
 	client, conn := NewClient(ips[0])
 	defer conn.Close()
 
-	n := 100
+	n := 30
 	success := false
 	UUIDs := make([]string, n)
-	for j := 0; j < 100; j++ {
+	for j := 0; j < 30; j++ {
 		name := fmt.Sprintf("a%03d", j)
 		for i := 0; i < n; i++ {
 			success, UUIDs[i] = Transfer(client, name, "b", 2, 1)
@@ -182,7 +182,7 @@ func BasicTest() {
 	Get(client, "b")
 	Verify(client, UUIDs[0])
 	Verify(client, UUIDs[20])
-	Verify(client, UUIDs[49])
+	//Verify(client, UUIDs[49])
 	GetHeight(client)
 	GetBlock(client, "")
 }
