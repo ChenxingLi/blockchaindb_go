@@ -235,6 +235,12 @@ func BasicTest() {
 		name := fmt.Sprintf("a%03d", i % n)
 		result := Verify(clients[rand.Int() % nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
+		/*
+		result = Verify(clients[rand.Int() % nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
+		Assert(result, "FAILED")
+		result = Verify(clients[rand.Int() % nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
+		Assert(result, "FAILED")
+		*/
 	}
 
 	sum := 0
@@ -264,10 +270,10 @@ func BasicTest() {
 		numTransactions = numTransactions + len(block.Transactions)
 		Assert(int(block.BlockID), height - i)
 	}
-	fmt.Println("Check root hash")
 	Assert(curHash, "0000000000000000000000000000000000000000000000000000000000000000")
-	fmt.Println("Check total number of transactions")
 	Assert(numTransactions, n * m + 300)
+
+
 }
 
 func StartServers() {
@@ -308,5 +314,6 @@ func main() {
 
 	ShutServers()
 
-	fmt.Println(passed_test, total_test)
+	fmt.Println("================================================================")
+	fmt.Println(fmt.Sprintf("Pass %d/%d tests", passed_test, total_test))
 }
