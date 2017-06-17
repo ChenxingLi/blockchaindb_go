@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 
+	hashapi "../hash"
 	pb "../protobuf/go"
 
 	"golang.org/x/net/context"
@@ -251,15 +252,22 @@ func BasicTest() {
 	Assert(height >= m + 5, true)
 
 	//var prevHash string
+	numTransactions := 0
 	curHash := leafHash
 	for i := 0; i < height; i++{
-		fmt.Println(curHash)
+		Assert(hashapi.CheckHash(curHash), true)
 		blockString := GetBlock(clients[rand.Int() % nservers], curHash)
+		Assert(hashapi.GetHashString(blockString), curHash)
 		var block pb.Block
 		json.Unmarshal([]byte(blockString), &block)
 		curHash = block.PrevHash
-		Assert(block.BlockID, height)
+		numTransactions = numTransactions + len(block.Transactions)
+		Assert(int(block.BlockID), height - i)
 	}
+	fmt.Println("Check root hash")
+	Assert(curHash, "0000000000000000000000000000000000000000000000000000000000000000")
+	fmt.Println("Check total number of transactions")
+	Assert(numTransactions, n * m + 300)
 }
 
 func StartServers() {
