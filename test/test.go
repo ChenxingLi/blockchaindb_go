@@ -213,10 +213,13 @@ func BasicTest() {
 	for j := 0; j < m; j++ {
 		go func(c chan bool, j int) {
 			for i := 0; i < n; i++ {
-				//client := clients[rand.Int() % nservers]
-				client := clients[0]
+				client := clients[rand.Int() % nservers]
+				//client := clients[0]
 				name := fmt.Sprintf("a%03d", i)
 				_, UUIDs[j * n + i] = Transfer(client, name, "b", 2, 1)
+				//Send some nonsense verify requests at the same time
+				result := Verify(client, "a", "b", 4, 2, UUID128bit()).Result.String()
+				Assert(result, "FAILED")
 			}
 			c <- true
 		}(c, j)
@@ -239,10 +242,10 @@ func BasicTest() {
 		result := Verify(clients[rand.Int() % nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
 		//try to verify transactions with wrong account or ammunt, should fail
-		result = Verify(clients[rand.Int() % nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
+		/*result = Verify(clients[rand.Int() % nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
 		result = Verify(clients[rand.Int() % nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
-		Assert(result, "FAILED")
+		Assert(result, "FAILED")*/
 	}
 
 	sum := 0
@@ -307,13 +310,13 @@ func main() {
 	fmt.Println(UUID128bit())
 
 	// Set up a connection to the server.
-	// ShutServers()
-	// ClearData()
-	// StartServers()
+	ShutServers()
+	ClearData()
+	StartServers()
 
 	BasicTest()
 
-	//ShutServers()
+	ShutServers()
 
 	fmt.Println("================================================================")
 	fmt.Println(fmt.Sprintf("Pass %d/%d tests", passed_test, total_test))
