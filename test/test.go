@@ -9,6 +9,8 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"os"
+	"os/exec"
 
 	pb "../protobuf/go"
 
@@ -16,19 +18,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-/*var address = func() string {
-	conf, err := ioutil.ReadFile("../server/config.json")
-	if err != nil {
-		panic(err)
-	}
-	var dat map[string]interface{}
-	err = json.Unmarshal(conf, &dat)
-	if err != nil {
-		panic(err)
-	}
-	dat = dat["1"].(map[string]interface{})
-	return fmt.Sprintf("%s:%s", dat["ip"], dat["port"])
-}()*/
+var debug bool = true
 
 var ips = func() []string {
 	conf, err := ioutil.ReadFile("../server/config.json")
@@ -77,8 +67,6 @@ func UUID128bit() string {
 	return fmt.Sprintf("%x", u)
 }
 
-var debug bool = true
-
 func NewClient(address string) (pb.BlockChainMinerClient, *grpc.ClientConn) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 
@@ -125,7 +113,7 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 }
 
 func Verify(c pb.BlockChainMinerClient, UUID string) *pb.VerifyResponse {
-	if r, err := c.Verify(context.Background(), &pb.Transaction{}); err != nil {
+	if r, err := c.Verify(context.Background(), &pb.Transaction{UUID: UUID}); err != nil {
 		log.Printf("VERIFY Error: %v", err)
 		return r
 	} else {
@@ -160,31 +148,96 @@ func GetBlock(c pb.BlockChainMinerClient, BlockHash string) string {
 	}
 }
 
-func BasicTest() {
-	fmt.Println("Starting basic test...")
+func WaitForPending(client pb.BlockChainMinerClient, UUID string) bool {
+	for t := 0; t < 20; t++{
+		result := Verify(client, UUID).Result
+		if result.String() == "SUCCEEDED" {
+			return true
+		} else if result.String() == "PENDING" {
+			return true
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+	return false
+}
+
+func FinishTest() {
 	client, conn := NewClient(ips[0])
 	defer conn.Close()
 
-	n := 30
-	success := false
-	UUIDs := make([]string, n)
-	for j := 0; j < 30; j++ {
-		name := fmt.Sprintf("a%03d", j)
-		for i := 0; i < n; i++ {
-			success, UUIDs[i] = Transfer(client, name, "b", 2, 1)
-			fmt.Println(success)
-			fmt.Println(UUIDs[i])
-		}
-		time.Sleep(time.Duration(1)*time.Second)
+	var success bool
+	UUIDs := make([]string, 300)
+
+	time.Sleep(time.Millisecond * 200)
+	for i := 0; i < 300; i++ {
+		success, UUIDs[i] = Transfer(client,"xxx","yyy",2,1)
+		Assert(success, true)
 	}
-	time.Sleep(time.Second * 10)
-	Get(client, "a000")
-	Get(client, "b")
-	Verify(client, UUIDs[0])
-	Verify(client, UUIDs[20])
-	//Verify(client, UUIDs[49])
-	GetHeight(client)
-	GetBlock(client, "")
+	for i := 0; i < 300; i++ {
+		Assert(WaitForPending(client, UUIDs[i]), true)
+	}
+}
+
+func BasicTest() {
+	fmt.Println("Starting basic test...")
+	nservers := len(ips)
+	clients := make([]pb.BlockChainMinerClient, nservers)
+	conns := make([]*grpc.ClientConn, nservers)
+	for i := 0; i < nservers; i++ {
+		clients[i], conns[i] = NewClient(ips[i])
+		defer conns[i].Close()
+	}
+
+	n := 50
+	m := 30
+	c := make(chan string, n * m)
+
+	for j := 0; j < m; j++ {
+		func(c chan string) {
+			for i := 0; i < n; i++ {
+				//client := clients[rand.Int() % nservers]
+				client := clients[0]
+				name := fmt.Sprintf("a%03d", i)
+				_, UUID := Transfer(client, name, "b", 2, 1)
+				c <- UUID
+			}
+		}(c)
+	}
+	FinishTest()
+
+	for i := 0; i < nservers; i++ {
+		Assert(Get(clients[i], "b"), 1000 + n * m)
+	}
+	for i := 0; i < n; i++ {
+		name := fmt.Sprintf("a%03d", i)
+		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)	
+	}
+
+}
+
+func StartServers() {
+	os.Chdir("../server")
+	exec.Command("sh","-c","go build").Run()
+	nservers := len(ips)
+	for i := 0; i < nservers; i++ {
+		s := fmt.Sprintf("./server --id=%d", i+1)
+		fmt.Println(s)
+		cmd := exec.Command("sh","-c",s)
+		//cmd.Stdout = os.Stdout
+		//cmd.Stderr = os.Stderr
+		cmd.Start()
+	}
+	os.Chdir("../test")
+	time.Sleep(time.Second * 2)
+}
+
+func ShutServers() {
+	exec.Command("sh","-c","pkill server").Run()
+}
+
+func ClearData() {
+	exec.Command("sh","-c","./clear.sh").Run()	
 }
 
 func main() {
@@ -193,5 +246,11 @@ func main() {
 	fmt.Println(UUID128bit())
 
 	// Set up a connection to the server.
+	ShutServers()
+	ClearData()
+	StartServers()
+
 	BasicTest()
+
+	ShutServers()
 }
