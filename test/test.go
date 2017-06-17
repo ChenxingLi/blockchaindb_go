@@ -112,8 +112,13 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 	}
 }
 
-func Verify(c pb.BlockChainMinerClient, UUID string) *pb.VerifyResponse {
-	if r, err := c.Verify(context.Background(), &pb.Transaction{UUID: UUID}); err != nil {
+func Verify(c pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) *pb.VerifyResponse {
+	if r, err := c.Verify(context.Background(), &pb.Transaction{
+		FromID: FromID,
+		ToID: ToID,
+		Value: Value,
+		MiningFee: Fee,
+		UUID: UUID}); err != nil {
 		log.Printf("VERIFY Error: %v", err)
 		return r
 	} else {
@@ -148,9 +153,9 @@ func GetBlock(c pb.BlockChainMinerClient, BlockHash string) string {
 	}
 }
 
-func WaitForPending(client pb.BlockChainMinerClient, UUID string) bool {
+func WaitForPending(client pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) bool {
 	for t := 0; t < 20; t++{
-		result := Verify(client, UUID).Result
+		result := Verify(client, FromID, ToID, Value, Fee, UUID).Result
 		if result.String() == "SUCCEEDED" {
 			return true
 		} else if result.String() == "PENDING" {
@@ -169,13 +174,13 @@ func FinishTest() {
 	var success bool
 	UUIDs := make([]string, 300)
 
-	time.Sleep(time.Millisecond * 200)
+	time.Sleep(time.Second)
 	for i := 0; i < 300; i++ {
 		success, UUIDs[i] = Transfer(client,"xxx","yyy",2,1)
 		Assert(success, true)
 	}
 	for i := 0; i < 300; i++ {
-		Assert(WaitForPending(client, UUIDs[i]), true)
+		Assert(WaitForPending(client, "xxx", "yyy", 2, 1,UUIDs[i]), true)
 	}
 }
 
@@ -191,18 +196,22 @@ func BasicTest() {
 
 	n := 50
 	m := 30
-	c := make(chan string, n * m)
+	c := make(chan bool, m)
+	UUIDs := make([]string, n * m)
 
 	for j := 0; j < m; j++ {
-		func(c chan string) {
+		go func(c chan bool, j int) {
 			for i := 0; i < n; i++ {
 				//client := clients[rand.Int() % nservers]
 				client := clients[0]
 				name := fmt.Sprintf("a%03d", i)
-				_, UUID := Transfer(client, name, "b", 2, 1)
-				c <- UUID
+				_, UUIDs[j * n + i] = Transfer(client, name, "b", 2, 1)
 			}
-		}(c)
+			c <- true
+		}(c, j)
+	}
+	for j := 0; j < m; j++ {
+		Assert(<-c, true)
 	}
 	FinishTest()
 
@@ -214,8 +223,8 @@ func BasicTest() {
 		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)	
 	}
 	for i := 0; i < n * m; i++ {
-		UUID := <-c
-		result := Verify(clients[rand.Int() % nservers], UUID).Result.String()
+		name := fmt.Sprintf("a%03d", i % n)
+		result := Verify(clients[rand.Int() % nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
 	}
 
