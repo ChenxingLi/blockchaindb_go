@@ -18,7 +18,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-var debug bool = true
+var debug bool = false
+var passed_test = 0
+var total_test = 0
 
 var ips = func() []string {
 	conf, err := ioutil.ReadFile("../server/config.json")
@@ -79,8 +81,11 @@ func NewClient(address string) (pb.BlockChainMinerClient, *grpc.ClientConn) {
 }
 
 func Assert(a, b interface{}) {
+	total_test++
 	if a != b {
-		log.Fatalf("[ERROR] Assertion failed, %v != %v", a, b)
+		log.Printf("[ERROR] Assertion failed, %v != %v", a, b)
+	} else {
+		passed_test++
 	}
 }
 
@@ -174,7 +179,7 @@ func FinishTest() {
 	var success bool
 	UUIDs := make([]string, 300)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 3)
 	for i := 0; i < 300; i++ {
 		success, UUIDs[i] = Transfer(client,"xxx","yyy",2,1)
 		Assert(success, true)
@@ -236,6 +241,12 @@ func BasicTest() {
 	fmt.Println(sum)
 	Assert(sum >= n * m, true)
 	Assert(sum <= n * m + 300, true)
+
+	response := GetHeight(clients[0])
+	height, leafHash := response.Height, response.LeafHash
+	fmt.Println(height)
+	_ = leafHash
+	Assert(int(height) >= m + 5, true)
 }
 
 func StartServers() {
@@ -275,4 +286,6 @@ func main() {
 	BasicTest()
 
 	ShutServers()
+
+	fmt.Println(passed_test, total_test)
 }
