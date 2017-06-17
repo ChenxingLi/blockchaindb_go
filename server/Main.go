@@ -36,7 +36,7 @@ var minerThreads = func() int {
 }()
 
 var (
-	queryBlockThreads      = communicationThreads
+	queryBlockThreads      = communicationThreads + 1
 	pushTransactionThreads = communicationThreads
 	pushBlockThreads       = communicationThreads
 	getHeightThreads       = communicationThreads

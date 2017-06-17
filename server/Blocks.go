@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/op/go-logging"
 	"github.com/golang/protobuf/jsonpb"
+	"regexp"
 )
 
 const zeroHash = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -135,6 +136,10 @@ func (self *BlockChain) parse(blockjson *pb.JsonBlockString) (*RichBlock, error)
 		return nil, errors.New("Wrong Server Id")
 	}
 
+	if ans, err := regexp.MatchString("\\d{8}", block.Nonce); len(block.Nonce) != 8 || !ans || err != nil {
+		return nil, errors.New("Invalid Nounce")
+	}
+
 	// Check Transaction Length
 	if len(block.Transactions) > 50 {
 		return nil, errors.New("Too Many Transactions")
@@ -255,7 +260,7 @@ func (self *BlockChain) checkTxs_nosync(in *pb.Transaction, block *RichBlock, lo
 		return id, hash
 	} else {
 		block := self.blocks[hash]
-		for _, tx := range block.block.Transactions{
+		for _, tx := range block.block.Transactions {
 
 			if tx.UUID == in.UUID {
 				if in.FromID == tx.FromID && in.ToID == tx.ToID && in.Value == tx.Value && in.MiningFee == tx.MiningFee && in.Type == tx.Type {
