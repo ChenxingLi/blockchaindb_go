@@ -31,6 +31,7 @@ func (c *rpcserver) Transfer(ctx context.Context, in *pb.Transaction) (*pb.Boole
 	}
 
 	blockchain.lock1.RLock()
+
 	if !blockchain.longest.accounts.afford_nosync(in.FromID, in.Value) {
 		blockchain.lock1.RUnlock()
 		log.Info("[RPCReturn][Tra]", false)
@@ -38,12 +39,16 @@ func (c *rpcserver) Transfer(ctx context.Context, in *pb.Transaction) (*pb.Boole
 	}
 	blockchain.lock1.RUnlock()
 
+
 	if !pendingTxs.addTx(in, log) {
 		log.Info("[RPCReturn][Tra]", false)
 		return &pb.BooleanResponse{Success: false}, nil
 	}
 
+
 	success := pushTransactions(in)
+
+
 	log.Info("[RPCReturn][Tra]", success)
 
 	return &pb.BooleanResponse{Success: success}, nil
@@ -57,21 +62,24 @@ func (c *rpcserver) Verify(ctx context.Context, in *pb.Transaction) (*pb.VerifyR
 	blockchain.lock1.RLock()
 	defer blockchain.lock1.RUnlock()
 
-	if contain, hash := blockchain.checkUuid_nosync(in.UUID, blockchain.longest, log); contain == 0 {
+	if contain, hash := blockchain.checkTxs_nosync(in, blockchain.longest, log); contain == 0 {
 		if blockchain.longest.accounts.afford_nosync(in.FromID, in.Value) {
 			pendingTxs.dataLock.RLock()
 			defer pendingTxs.dataLock.RUnlock()
 			if _, exist := pendingTxs.uuidmap[in.UUID]; exist {
 				log.Info("[RPCReturn][Ver]Pending")
-				return &pb.VerifyResponse{Result: pb.VerifyResponse_PENDING}, nil
+				return &pb.VerifyResponse{Result: pb.VerifyResponse_PENDING, BlockHash: ""}, nil
 			} else {
 				log.Info("[RPCReturn][Ver]Fail")
-				return &pb.VerifyResponse{Result: pb.VerifyResponse_FAILED}, nil
+				return &pb.VerifyResponse{Result: pb.VerifyResponse_FAILED, BlockHash: ""}, nil
 			}
 		} else {
 			log.Info("[RPCReturn][Ver]Fail")
-			return &pb.VerifyResponse{Result: pb.VerifyResponse_FAILED}, nil
+			return &pb.VerifyResponse{Result: pb.VerifyResponse_FAILED, BlockHash: ""}, nil
 		}
+	} else if contain == -1 {
+		log.Info("[RPCReturn][Ver]Fail")
+		return &pb.VerifyResponse{Result: pb.VerifyResponse_FAILED, BlockHash: ""}, nil
 	} else if contain+6 <= blockchain.longest.block.BlockID {
 		log.Info("[RPCReturn][Ver]Success")
 		return &pb.VerifyResponse{Result: pb.VerifyResponse_SUCCEEDED, BlockHash: hash}, nil
@@ -99,7 +107,7 @@ func (c *rpcserver) GetBlock(ctx context.Context, in *pb.GetBlockRequest) (*pb.J
 	hash := in.BlockHash
 	if len(hash) != 64 || hash == zeroHash {
 		log.Infof("[RPCReturn][GBk]")
-		return &pb.JsonBlockString{}, nil
+		return &pb.JsonBlockString{Json: ""}, nil
 	}
 
 	blockchain.lock1.RLock()
@@ -111,7 +119,7 @@ func (c *rpcserver) GetBlock(ctx context.Context, in *pb.GetBlockRequest) (*pb.J
 		return &pb.JsonBlockString{Json: value.json}, nil
 	} else {
 		log.Infof("[RPCReturn][GBk]%v", pb.JsonBlockString{})
-		return &pb.JsonBlockString{}, nil
+		return &pb.JsonBlockString{Json: ""}, nil
 	}
 }
 

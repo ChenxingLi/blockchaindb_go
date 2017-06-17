@@ -249,6 +249,28 @@ func (self *BlockChain) insert(block *RichBlock, log *logging.Logger) (bool, err
 	return update, nil
 }
 
+func (self *BlockChain) checkTxs_nosync(in *pb.Transaction, block *RichBlock, log *logging.Logger) (int32, string) {
+	id, hash := self.checkUuid_nosync(in.UUID, block, log)
+	if id == 0 {
+		return id, hash
+	} else {
+		block := self.blocks[hash]
+		for _, tx := range block.block.Transactions{
+
+			if tx.UUID == in.UUID {
+				if in.FromID == tx.FromID && in.ToID == tx.ToID && in.Value == tx.Value && in.MiningFee == tx.MiningFee && in.Type == tx.Type {
+					return id, hash
+				} else {
+					return -1, ""
+				}
+			}
+		}
+		log.Error("Inconsistent UUID belong")
+		return -1, ""
+	}
+
+}
+
 func (self *BlockChain) checkUuid_nosync(uuid string, block *RichBlock, log *logging.Logger) (int32, string) {
 	hashes, success := self.uuidmap[uuid]
 

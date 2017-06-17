@@ -19,7 +19,7 @@ import (
 
 
 var communicationThreads = func() int {
-	if runtime.NumCPU() >= 4 {
+	if runtime.NumCPU() >= 8 {
 		return 2
 	} else {
 		return 1
@@ -27,10 +27,10 @@ var communicationThreads = func() int {
 } ()
 var minerThreads = func() int {
 	return runtime.NumCPU()
-	if runtime.NumCPU() > 4 {
-		return runtime.NumCPU() - 2
-	} else if runtime.NumCPU() > 1 {
-		return runtime.NumCPU() - 1
+	if runtime.NumCPU() >= 8 {
+		return 3
+	} else if runtime.NumCPU() >= 4 {
+		return 2
 	} else {
 		return 1
 	}
@@ -47,7 +47,7 @@ const initBalance = 1000
 const pendingFilterThreshold = 100000
 const blockLimit = 50
 const timeoutSencond = 20
-const loglevel = logging.DEBUG
+const loglevel = logging.CRITICAL
 
 var blockchain *BlockChain
 var pendingTxs *PendingTransactions
@@ -60,6 +60,8 @@ var selfid int
 var log = logging.MustGetLogger("main")
 var pbMarshal = jsonpb.Marshaler{}
 var pbUnmarshal = jsonpb.Unmarshaler{}
+
+
 
 func initalize() {
 	blockchain = newBlockChain()

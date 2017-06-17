@@ -17,11 +17,13 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"github.com/golang/protobuf/jsonpb"
 )
 
-var debug bool = false
+var debug bool = true
 var passed_test = 0
 var total_test = 0
+var jsonpbm = jsonpb.Marshaler{}
 
 var ips = func() []string {
 	conf, err := ioutil.ReadFile("../server/config.json")
@@ -104,7 +106,7 @@ func Get(c pb.BlockChainMinerClient, UserID string) int {
 
 func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32) (bool, string) {
 	UUID := UUID128bit()
-	//start := time.Now()
+	start := time.Now()
 	if r, err := c.Transfer(context.Background(), &pb.Transaction{
 		Type:   pb.Transaction_TRANSFER,
 		UUID:   UUID,
@@ -115,24 +117,25 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 		if debug {
 			log.Printf("TRANSFER Return: %v", r.Success)
 		}
-		//elapsed := time.Since(start)
-		//log.Printf("Transfer took %s", elapsed)
+		elapsed := time.Since(start)
+		log.Printf("Transfer took %s", elapsed)
 		return r.Success, UUID
 	}
 }
 
 func Verify(c pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) *pb.VerifyResponse {
 	if r, err := c.Verify(context.Background(), &pb.Transaction{
-		FromID: FromID,
-		ToID: ToID,
-		Value: Value,
+		Type:      pb.Transaction_TRANSFER,
+		FromID:    FromID,
+		ToID:      ToID,
+		Value:     Value,
 		MiningFee: Fee,
-		UUID: UUID}); err != nil {
+		UUID:      UUID}); err != nil {
 		log.Printf("VERIFY Error: %v", err)
 		return r
 	} else {
 		if debug {
-			log.Printf("VERIFY Return: %v", r)
+			log.Printf("VERIFY Return: %v", *r)
 		}
 		return r
 	}
@@ -163,7 +166,7 @@ func GetBlock(c pb.BlockChainMinerClient, BlockHash string) string {
 }
 
 func WaitForPending(client pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) bool {
-	for t := 0; t < 20; t++{
+	for t := 0; t < 20; t++ {
 		result := Verify(client, FromID, ToID, Value, Fee, UUID).Result
 		if result.String() == "SUCCEEDED" {
 			return true
@@ -185,11 +188,11 @@ func FinishTest() {
 
 	time.Sleep(time.Second * 3)
 	for i := 0; i < 300; i++ {
-		success, UUIDs[i] = Transfer(client,"xxx","yyy",2,1)
+		success, UUIDs[i] = Transfer(client, "xxx", "yyy", 2, 1)
 		Assert(success, true)
 	}
 	for i := 0; i < 300; i++ {
-		Assert(WaitForPending(client, "xxx", "yyy", 2, 1,UUIDs[i]), true)
+		Assert(WaitForPending(client, "xxx", "yyy", 2, 1, UUIDs[i]), true)
 	}
 }
 
@@ -203,18 +206,36 @@ func BasicTest() {
 		defer conns[i].Close()
 	}
 
+	note := make(chan int, 1)
+
+	//go func(c chan int) {
+	//	loop := true
+	//	for loop {
+	//		select {
+	//		case <-c:
+	//			loop = false
+	//		default:
+	//		}
+	//		//client := clients[rand.Int() % nservers]
+	//		client := clients[0]
+	//		_ = Verify(client, "a", "b", 2, 1, UUID128bit())
+	//	}
+	//}(note)
+
 	n := 50
 	m := 30
 	c := make(chan bool, m)
-	UUIDs := make([]string, n * m)
+	UUIDs := make([]string, n*m * 2)
+
 
 	for j := 0; j < m; j++ {
 		go func(c chan bool, j int) {
-			for i := 0; i < n; i++ {
+			for i := 0; i < n * 2; i+=2 {
 				//client := clients[rand.Int() % nservers]
 				client := clients[0]
 				name := fmt.Sprintf("a%03d", i)
-				_, UUIDs[j * n + i] = Transfer(client, name, "b", 2, 1)
+				_, UUIDs[j*2*n+i] = Transfer(client, name, "b", 2, 1)
+				_, UUIDs[j*2*n+i+1] = Transfer(client, name, "b", 1001, 1)
 			}
 			c <- true
 		}(c, j)
@@ -222,68 +243,68 @@ func BasicTest() {
 	for j := 0; j < m; j++ {
 		Assert(<-c, true)
 	}
+	note <- 1
 	FinishTest()
 
 	for i := 0; i < nservers; i++ {
-		Assert(Get(clients[i], "b"), 1000 + n * m)
+		Assert(Get(clients[i], "b"), 1000+n*m)
 	}
 	for i := 0; i < n; i++ {
 		name := fmt.Sprintf("a%03d", i)
-		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)	
+		Assert(Get(clients[rand.Int()%nservers], name), 1000-2*m)
 	}
-	for i := 0; i < n * m; i++ {
-		name := fmt.Sprintf("a%03d", i % n)
-		result := Verify(clients[rand.Int() % nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
+	for i := 0; i < n * m * 2; i+=2 {
+		name := fmt.Sprintf("a%03d", i%n)
+		result := Verify(clients[rand.Int()%nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
-		/*
-		result = Verify(clients[rand.Int() % nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
+		result = Verify(clients[rand.Int()%nservers], name, "b", 2, 1, UUIDs[i+1]).Result.String()
 		Assert(result, "FAILED")
-		result = Verify(clients[rand.Int() % nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
+		result = Verify(clients[rand.Int()%nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
-		*/
+		result = Verify(clients[rand.Int()%nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
+		Assert(result, "FAILED")
 	}
 
 	sum := 0
 	for i := 0; i < nservers; i++ {
 		name := fmt.Sprintf("Server%02d", i+1)
-		sum =  sum + Get(clients[rand.Int() % nservers], name) - 1000
+		sum = sum + Get(clients[rand.Int()%nservers], name) - 1000
 	}
 	fmt.Println(sum)
-	Assert(sum >= n * m, true)
-	Assert(sum <= n * m + 300, true)
+	Assert(sum >= n*m, true)
+	Assert(sum <= n*m+300, true)
 
 	response := GetHeight(clients[0])
 	height, leafHash := int(response.Height), response.LeafHash
 	fmt.Println(height)
-	Assert(height >= m + 5, true)
+	Assert(height >= m+5, true)
 
 	//var prevHash string
 	numTransactions := 0
 	curHash := leafHash
-	for i := 0; i < height; i++{
+	for i := 0; i < height; i++ {
 		Assert(hashapi.CheckHash(curHash), true)
-		blockString := GetBlock(clients[rand.Int() % nservers], curHash)
+		blockString := GetBlock(clients[rand.Int()%nservers], curHash)
 		Assert(hashapi.GetHashString(blockString), curHash)
 		var block pb.Block
 		json.Unmarshal([]byte(blockString), &block)
 		curHash = block.PrevHash
 		numTransactions = numTransactions + len(block.Transactions)
-		Assert(int(block.BlockID), height - i)
+		Assert(int(block.BlockID), height-i)
 	}
 	Assert(curHash, "0000000000000000000000000000000000000000000000000000000000000000")
-	Assert(numTransactions, n * m + 300)
-
+	Assert(numTransactions, n*m+300)
 
 }
 
 func StartServers() {
 	os.Chdir("../server")
-	exec.Command("sh","-c","go build").Run()
+	exec.Command("sh", "-c", "go build").Run()
 	nservers := len(ips)
 	for i := 0; i < nservers; i++ {
 		s := fmt.Sprintf("./server --id=%d", i+1)
 		fmt.Println(s)
-		cmd := exec.Command("sh","-c",s)
+		cmd := exec.Command("sh", "-c", s)
 		//cmd.Stdout = os.Stdout
 		//cmd.Stderr = os.Stderr
 		cmd.Start()
@@ -293,11 +314,11 @@ func StartServers() {
 }
 
 func ShutServers() {
-	exec.Command("sh","-c","pkill server").Run()
+	exec.Command("sh", "-c", "pkill server").Run()
 }
 
 func ClearData() {
-	exec.Command("sh","-c","./clear.sh").Run()	
+	exec.Command("sh", "-c", "./clear.sh").Run()
 }
 
 func main() {
@@ -305,7 +326,7 @@ func main() {
 	rand.Seed(int64(time.Now().Nanosecond()))
 	fmt.Println(UUID128bit())
 
-	// Set up a connection to the server.
+	//// Set up a connection to the server.
 	// ShutServers()
 	// ClearData()
 	// StartServers()

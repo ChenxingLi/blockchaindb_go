@@ -77,22 +77,6 @@ func (self *Miner) update(log *logging.Logger) bool {
 
 	self.longest = blockchain.longest
 
-	//block := self.longest
-
-	//for block.hash != zeroHash {
-	//	for _, tx := range block.block.Transactions {
-	//		if _, suc := self.uuidmap[tx.UUID]; !suc {
-	//			log.Error("Wrong %s, current is %d, appears in %d",tx.UUID, self.longest.block.BlockID, block.block.BlockID )
-	//		}
-	//	}
-	//	block = blockchain.blocks[block.block.PrevHash]
-	//}
-	//for key, _ := range self.uuidmap{
-	//	if id, _ := blockchain.checkUuid_nosync(key,self.longest,log); id ==0 {
-	//		log.Error("Wrong")
-	//	}
-	//}
-
 	blockchain.lock1.RUnlock()
 	log.Debug("[rels]Blockchain read Lock1")
 
