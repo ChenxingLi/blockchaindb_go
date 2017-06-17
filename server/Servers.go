@@ -165,7 +165,7 @@ func queryBlocks(hashes []string) {
 				blockchain.add(block, true, log)
 				delete(blacklist, block.hash)
 			} else {
-				log.Debug("Ger wrong transaction", err)
+				log.Debug("Get wrong transaction", err)
 			}
 		}
 		if len(blacklist) == 0 {

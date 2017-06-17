@@ -6,7 +6,6 @@ import (
 	pb "../protobuf/go"
 	"sort"
 	"fmt"
-	"encoding/json"
 	"github.com/op/go-logging"
 	mysha2 "../sha256-simd-master"
 )
@@ -69,6 +68,7 @@ func (self *Miner) update(log *logging.Logger) bool {
 		self.undoUUIDmap(tmpBlock1)
 		tmpBlock1 = blockchain.blocks[tmpBlock1.block.PrevHash]
 	}
+	log.Warningf("[    ]Update %d, %d, %d", self.longest.block.BlockID, tmpBlock1.block.BlockID, blockchain.longest.block.BlockID)
 	tmpBlock2 := blockchain.longest
 	for tmpBlock1 != tmpBlock2 {
 		self.doUUIDmap(tmpBlock2)
@@ -76,6 +76,17 @@ func (self *Miner) update(log *logging.Logger) bool {
 	}
 
 	self.longest = blockchain.longest
+
+	block := self.longest
+
+	for block.hash != zeroHash {
+		for _, tx := range block.block.Transactions {
+			if _, suc := self.uuidmap[tx.UUID]; !suc {
+				log.Error("Wrong %s, current is %d, appears in %d",tx.UUID, self.longest.block.BlockID, block.block.BlockID )
+			}
+		}
+		block = blockchain.blocks[block.block.PrevHash]
+	}
 
 	blockchain.lock1.RUnlock()
 	log.Debug("[rels]Blockchain read Lock1")
@@ -136,7 +147,7 @@ func (self *Miner) run_producer() {
 	alarms := make([]Notification, minerThreads)
 	outchannel := make(chan string)
 	for i := 0; i < minerThreads; i++ {
-		inchannel[i] = make(chan string, 100)
+		inchannel[i] = make(chan string, 1)
 		alarms[i].channel = make(chan int, 1)
 		go mine(inchannel[i], outchannel, alarms[i], i)
 	}
@@ -164,19 +175,28 @@ func (self *Miner) run_producer() {
 				MinerID:      fmt.Sprintf("Server%02d", selfid),
 				Nonce:        "00000000",
 			}
-			jsonstring, err := json.Marshal(block)
+			//jsonstring, err := json.Marshal(block)
+			jsonstring, err := pbMarshal.MarshalToString(&block)
 			if err != nil {
 				log.Infof("json encoding error: %v", err)
 			}
 			in := string(jsonstring[:len(jsonstring)-10])
 			log.Debugf("[    ]Update json")
 			for i := 0; i < minerThreads; i++ {
+				select {
+				case <- inchannel[i]:
+				default:
+				}
 				inchannel[i] <- in
 				alarms[i].wake()
 			}
 		} else {
 			log.Debugf("[    ]Block Slave")
 			for i := 0; i < minerThreads; i++ {
+				select {
+				case <- inchannel[i]:
+				default:
+				}
 				inchannel[i] <- ""
 			}
 		}
@@ -192,9 +212,11 @@ func (self *Miner) run_minter(out chan string) {
 	for {
 		js := <-out
 		if CheckHash(GetHashString(js)) {
-			log.Warningf("Mine: %s", js)
+
+			log.Noticef("Mine: %s", js)
 			pushBlocks(js)
 			if block, err := blockchain.parse(&pb.JsonBlockString{js}); err == nil {
+				log.Warningf("Mine: %d, %10.10s, %10.10s",block.block.BlockID, block.hash, block.block.PrevHash)
 				blockchain.add(block, true, log)
 			} else {
 				log.Error("Self Block Wrong:", err)
@@ -217,7 +239,6 @@ func mine(in chan string, out chan string, alarm Notification, i int) {
 	j := 0
 	for {
 		loop := true
-		//log.Warning("tick")
 		for loop {
 			select {
 			case tmp := <-in:
@@ -227,9 +248,8 @@ func mine(in chan string, out chan string, alarm Notification, i int) {
 				loop = false
 			}
 		}
-		//log.Warning("tick")
 
-		if currentJS == "" || len(currentJS) == 0{
+		if currentJS == ""{
 			log.Debug("Miner Slave sleep")
 			alarm.sleep()
 			log.Debug("Miner Slave wake up")

@@ -11,16 +11,39 @@ import (
 	"google.golang.org/grpc"
 	pb "../protobuf/go"
 	"os"
+	"math/rand"
+	"runtime"
+	"github.com/golang/protobuf/jsonpb"
+)
+
+
+
+var communicationThreads = func() int {
+	if runtime.NumCPU() >= 4 {
+		return 2
+	} else {
+		return 1
+	}
+} ()
+var minerThreads = func() int {
+	return runtime.NumCPU()
+	if runtime.NumCPU() > 4 {
+		return runtime.NumCPU() - 2
+	} else if runtime.NumCPU() > 1 {
+		return runtime.NumCPU() - 1
+	} else {
+		return 1
+	}
+}()
+
+var (
+	queryBlockThreads      = communicationThreads
+	pushTransactionThreads = communicationThreads
+	pushBlockThreads       = communicationThreads
+	getHeightThreads       = communicationThreads
 )
 
 const initBalance = 1000
-const (
-	queryBlockThreads      = 2
-	pushTransactionThreads = 2
-	pushBlockThreads       = 2
-	getHeightThreads       = 2
-	minerThreads           = 1
-)
 const pendingFilterThreshold = 100000
 const blockLimit = 50
 const timeoutSencond = 20
@@ -35,6 +58,8 @@ var nserver int
 var selfid int
 
 var log = logging.MustGetLogger("main")
+var pbMarshal = jsonpb.Marshaler{}
+var pbUnmarshal = jsonpb.Unmarshaler{}
 
 func initalize() {
 	blockchain = newBlockChain()
@@ -106,7 +131,9 @@ func startServer() {
 }
 
 func main() {
-	sha256o = true
+
+	randstring := fmt.Sprintf("%x", rand.Int())
+	sha256o = (GetHashString(randstring) == GetFastHashString(randstring))
 	var pid = flag.Int("id", 1, "Server's ID, 1<=ID<=NServers")
 	flag.Parse()
 

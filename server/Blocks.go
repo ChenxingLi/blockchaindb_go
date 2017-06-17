@@ -4,10 +4,10 @@ import (
 	pb "../protobuf/go"
 	"sync"
 	"container/list"
-	"encoding/json"
 	"fmt"
 	"errors"
 	"github.com/op/go-logging"
+	"github.com/golang/protobuf/jsonpb"
 )
 
 const zeroHash = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -116,7 +116,8 @@ func (self *BlockChain) parse(blockjson *pb.JsonBlockString) (*RichBlock, error)
 
 	// Get block
 	block := pb.Block{}
-	err1 := json.Unmarshal([]byte(jsonstring), &block)
+	//err1 := json.Unmarshal([]byte(jsonstring), &block)
+	err1 := jsonpb.UnmarshalString(jsonstring, &block)
 	if err1 != nil {
 		return nil, errors.New("Fail to Unmarshal")
 	}
@@ -185,6 +186,7 @@ func (self *BlockChain) insert(block *RichBlock, log *logging.Logger) (bool, err
 	for k, v := range parent.accounts.data {
 		block.accounts.data[k] = v
 	}
+	selfplag := make(map[string]bool)
 	for _, transaction := range block.block.Transactions {
 		id, hash := self.checkUuid_nosync(transaction.UUID, parent, log)
 		if id > 0 {
@@ -195,19 +197,27 @@ func (self *BlockChain) insert(block *RichBlock, log *logging.Logger) (bool, err
 		if err != nil {
 			return false, errors.New(fmt.Sprintf("Account %s don't have enough money", transaction.FromID))
 		}
+		if _, suc := selfplag[transaction.UUID]; suc {
+			//log.Error("self plag")
+			return false, errors.New(fmt.Sprintf("self plagiarism tx, %v", transaction))
+		}
 
 		block.accounts.add_nosync(transaction.ToID, transaction.Value-transaction.MiningFee)
 		block.accounts.add_nosync(block.block.MinerID, transaction.MiningFee)
+		selfplag[transaction.UUID] = true
 	}
 
 	//Build block history index
 	block.prevBlock = make([]*RichBlock, 0, 5)
 	index := 0
+	s := ""
 	for tmp := int32(1); tmp < block.block.BlockID; tmp *= 2 {
 		if parent.block.BlockID%tmp == 0 {
 			block.prevBlock = append(block.prevBlock, parent)
+			s += fmt.Sprintf("%d, ", parent.block.BlockID)
 		} else {
 			block.prevBlock = append(block.prevBlock, parent.prevBlock[index])
+			s += fmt.Sprintf("%d, ", parent.prevBlock[index].block.BlockID)
 		}
 		index ++
 	}
@@ -233,6 +243,7 @@ func (self *BlockChain) insert(block *RichBlock, log *logging.Logger) (bool, err
 	}
 
 	log.Noticef("Insert: \n BlockID: %d, MinerID: %s, hash: %s, \n %v, %v", block.block.BlockID, block.block.MinerID, block.hash, block.json, block.accounts)
+	log.Warningf("Insert:  BlockID: %d, MinerID: %s, hash: %10.10s, %s", block.block.BlockID, block.block.MinerID, block.hash, s)
 	go saveBlock(block.json)
 
 	return update, nil
@@ -267,6 +278,9 @@ func (self *BlockChain) checkAncestor_nosync(block *RichBlock, ancestor *RichBlo
 	aimBlockID := ancestor.block.BlockID
 	currentBlock := block
 	for {
+		if currentBlock.block.BlockID <= ancestor.block.BlockID {
+			log.Error("Previous cursor wrong")
+		}
 		for _, tmpBlock := range currentBlock.prevBlock {
 			if tmpBlock.block.BlockID == aimBlockID {
 				return tmpBlock.hash == ancestor.hash
@@ -368,6 +382,7 @@ func (self *BlockChain) run() {
 					self.alarm.wake()
 					update = update || tmpUpdate
 				} else {
+					log.Info("Invalid block", err)
 					statusList[block.hash] = -1
 					self.alarm.wake()
 				}
