@@ -213,7 +213,20 @@ func BasicTest() {
 		name := fmt.Sprintf("a%03d", i)
 		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)	
 	}
+	for i := 0; i < n * m; i++ {
+		UUID := <-c
+		result := Verify(clients[rand.Int() % nservers], UUID).Result.String()
+		Assert(result, "SUCCEEDED")
+	}
 
+	sum := 0
+	for i := 0; i < nservers; i++ {
+		name := fmt.Sprintf("Server%02d", i+1)
+		sum =  sum + Get(clients[rand.Int() % nservers], name) - 1000
+	}
+	fmt.Println(sum)
+	Assert(sum >= n * m, true)
+	Assert(sum <= n * m + 300, true)
 }
 
 func StartServers() {
