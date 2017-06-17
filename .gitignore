@@ -2,3 +2,4 @@ server/server
 cross-test/*
 .dropbox
 .idea/*
+server/err

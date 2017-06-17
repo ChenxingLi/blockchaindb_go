@@ -307,13 +307,13 @@ func main() {
 	fmt.Println(UUID128bit())
 
 	// Set up a connection to the server.
-	ShutServers()
-	ClearData()
-	StartServers()
+	// ShutServers()
+	// ClearData()
+	// StartServers()
 
 	BasicTest()
 
-	ShutServers()
+	//ShutServers()
 
 	fmt.Println("================================================================")
 	fmt.Println(fmt.Sprintf("Pass %d/%d tests", passed_test, total_test))

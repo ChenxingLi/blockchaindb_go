@@ -4,7 +4,7 @@ import (
 	hashapi "../hash"
 	"os"
 	"github.com/op/go-logging"
-	mysha2 "sha256-simd-master"
+	mysha2 "../sha256-simd-master"
 	"fmt"
 )
 
