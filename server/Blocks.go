@@ -237,13 +237,13 @@ func (self *BlockChain) insert(block *RichBlock, log *logging.Logger) (bool, err
 
 	//Update longest
 	update := false
-	if self.longest.block.BlockID < block.block.BlockID {
+	if self.longest.block.BlockID < block.block.BlockID || (self.longest.block.BlockID == block.block.BlockID && self.longest.block.PrevHash > block.block.PrevHash  ) {
 		self.longest = block
 		update = true
 	}
 
 	log.Noticef("Insert: \n BlockID: %d, MinerID: %s, hash: %s, \n %v, %v", block.block.BlockID, block.block.MinerID, block.hash, block.json, block.accounts)
-	log.Warningf("Insert:  BlockID: %d, MinerID: %s, hash: %10.10s, %s", block.block.BlockID, block.block.MinerID, block.hash, s)
+	log.Warningf("Insert:  BlockID: %d, MinerID: %s, hash: %10.10s", block.block.BlockID, block.block.MinerID, block.hash)
 	go saveBlock(block.json)
 
 	return update, nil

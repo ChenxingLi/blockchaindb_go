@@ -14,7 +14,7 @@ type Miner struct {
 	lock      sync.RWMutex
 	longest   *RichBlock
 	miningTxs TxList
-	uuidmap   map[string]bool
+	uuidmap   map[string]int32
 
 	alarm Notification
 }
@@ -25,7 +25,7 @@ func newMiner() *Miner {
 	var miner Miner
 	miner.longest = blockchain.longest
 	miner.miningTxs = TxList{}
-	miner.uuidmap = make(map[string]bool)
+	miner.uuidmap = make(map[string]int32)
 
 	miner.alarm.channel = make(chan int, 1)
 	return &miner
@@ -68,7 +68,7 @@ func (self *Miner) update(log *logging.Logger) bool {
 		self.undoUUIDmap(tmpBlock1)
 		tmpBlock1 = blockchain.blocks[tmpBlock1.block.PrevHash]
 	}
-	log.Warningf("[    ]Update %d, %d, %d", self.longest.block.BlockID, tmpBlock1.block.BlockID, blockchain.longest.block.BlockID)
+	log.Warningf("Switch longest block %d, %d, %d", self.longest.block.BlockID, tmpBlock1.block.BlockID, blockchain.longest.block.BlockID)
 	tmpBlock2 := blockchain.longest
 	for tmpBlock1 != tmpBlock2 {
 		self.doUUIDmap(tmpBlock2)
@@ -77,16 +77,21 @@ func (self *Miner) update(log *logging.Logger) bool {
 
 	self.longest = blockchain.longest
 
-	block := self.longest
+	//block := self.longest
 
-	for block.hash != zeroHash {
-		for _, tx := range block.block.Transactions {
-			if _, suc := self.uuidmap[tx.UUID]; !suc {
-				log.Error("Wrong %s, current is %d, appears in %d",tx.UUID, self.longest.block.BlockID, block.block.BlockID )
-			}
-		}
-		block = blockchain.blocks[block.block.PrevHash]
-	}
+	//for block.hash != zeroHash {
+	//	for _, tx := range block.block.Transactions {
+	//		if _, suc := self.uuidmap[tx.UUID]; !suc {
+	//			log.Error("Wrong %s, current is %d, appears in %d",tx.UUID, self.longest.block.BlockID, block.block.BlockID )
+	//		}
+	//	}
+	//	block = blockchain.blocks[block.block.PrevHash]
+	//}
+	//for key, _ := range self.uuidmap{
+	//	if id, _ := blockchain.checkUuid_nosync(key,self.longest,log); id ==0 {
+	//		log.Error("Wrong")
+	//	}
+	//}
 
 	blockchain.lock1.RUnlock()
 	log.Debug("[rels]Blockchain read Lock1")
@@ -106,13 +111,12 @@ func (self *Miner) update(log *logging.Logger) bool {
 		if !success {
 			log.Error("Invalid format in list")
 		}
-		if _, exist := self.uuidmap[tx.UUID]; exist {
+		if value, exist := self.uuidmap[tx.UUID]; exist && self.longest.block.BlockID - value >= 6 {
 			pendingTxs.data.Remove(e)
 			delete(pendingTxs.uuidmap, tx.UUID)
 		}
 	}
 
-	log.Debugf("[    ]Pending list before filter: %d", pendingTxs.data.Len())
 	if pendingTxs.data.Len() > pendingFilterThreshold {
 		log.Debugf("[    ]Pending list before filter: %d", pendingTxs.data.Len())
 		self.longest.accounts.filterPendingTx()
@@ -131,7 +135,7 @@ func (self *Miner) update(log *logging.Logger) bool {
 
 func (self *Miner) doUUIDmap(block *RichBlock) {
 	for _, tx := range block.block.Transactions {
-		self.uuidmap[tx.UUID] = true
+		self.uuidmap[tx.UUID] = block.block.BlockID
 	}
 }
 

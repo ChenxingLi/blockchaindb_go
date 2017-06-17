@@ -104,11 +104,11 @@ func (self *PendingTransactions) run() {
 		log.Debug("[lock]Tx buffer lock")
 		tmpBuffer := self.buffer
 		self.buffer = list.New()
-		uuids := make([]string,0,len(self.uuidmap))
-		for key, _ := range self.uuidmap {
+		uuids := make([]string,0,len(self.bufferuuidmap))
+		for key, _ := range self.bufferuuidmap {
 			uuids = append(uuids, key)
 		}
-		self.uuidmap = make(map[string]bool)
+		self.bufferuuidmap = make(map[string]bool)
 		self.bufferLock.Unlock()
 		log.Debug("[rels]Tx buffer lock")
 

@@ -279,13 +279,13 @@ func main() {
 	fmt.Println(UUID128bit())
 
 	// Set up a connection to the server.
-	ShutServers()
-	ClearData()
-	StartServers()
+	// ShutServers()
+	// ClearData()
+	// StartServers()
 
 	BasicTest()
 
-	ShutServers()
+	//ShutServers()
 
 	fmt.Println(passed_test, total_test)
 }
