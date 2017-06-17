@@ -191,6 +191,7 @@ func FinishTest() {
 	for i := 0; i < 300; i++ {
 		Assert(WaitForPending(client, "xxx", "yyy", 2, 1,UUIDs[i]), true)
 	}
+	time.Sleep(time.Second * 3)
 }
 
 func BasicTest() {
@@ -208,6 +209,7 @@ func BasicTest() {
 	c := make(chan bool, m)
 	UUIDs := make([]string, n * m)
 
+	// use 30 goroutines, each transferring 2 from each of "a000"-"a049" to "b" with mining fee 1 
 	for j := 0; j < m; j++ {
 		go func(c chan bool, j int) {
 			for i := 0; i < n; i++ {
@@ -222,25 +224,25 @@ func BasicTest() {
 	for j := 0; j < m; j++ {
 		Assert(<-c, true)
 	}
-	FinishTest()
+	FinishTest()//add 6 useless blocks (300 transactions)
 
 	for i := 0; i < nservers; i++ {
-		Assert(Get(clients[i], "b"), 1000 + n * m)
+		Assert(Get(clients[i], "b"), 1000 + n * m)//check the balance of b
 	}
 	for i := 0; i < n; i++ {
 		name := fmt.Sprintf("a%03d", i)
-		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)	
+		Assert(Get(clients[rand.Int() % nservers], name), 1000 - 2 * m)//check the balance of each "a"s
 	}
 	for i := 0; i < n * m; i++ {
+		//verify the normal n * m transactions have succeeded
 		name := fmt.Sprintf("a%03d", i % n)
 		result := Verify(clients[rand.Int() % nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
-		/*
+		//try to verify transactions with wrong account or ammunt, should fail
 		result = Verify(clients[rand.Int() % nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
 		result = Verify(clients[rand.Int() % nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
-		*/
 	}
 
 	sum := 0
@@ -249,31 +251,30 @@ func BasicTest() {
 		sum =  sum + Get(clients[rand.Int() % nservers], name) - 1000
 	}
 	fmt.Println(sum)
+	//check the mining fee
 	Assert(sum >= n * m, true)
 	Assert(sum <= n * m + 300, true)
 
 	response := GetHeight(clients[0])
 	height, leafHash := int(response.Height), response.LeafHash
 	fmt.Println(height)
-	Assert(height >= m + 5, true)
+	Assert(height >= m + 5, true)//check the length of longest chain
 
 	//var prevHash string
 	numTransactions := 0
 	curHash := leafHash
 	for i := 0; i < height; i++{
-		Assert(hashapi.CheckHash(curHash), true)
+		Assert(hashapi.CheckHash(curHash), true)//check the validity of hash value
 		blockString := GetBlock(clients[rand.Int() % nservers], curHash)
-		Assert(hashapi.GetHashString(blockString), curHash)
+		Assert(hashapi.GetHashString(blockString), curHash)//check the validity of hash value
 		var block pb.Block
 		json.Unmarshal([]byte(blockString), &block)
 		curHash = block.PrevHash
 		numTransactions = numTransactions + len(block.Transactions)
-		Assert(int(block.BlockID), height - i)
+		Assert(int(block.BlockID), height - i)//chekc BlockID
 	}
-	Assert(curHash, "0000000000000000000000000000000000000000000000000000000000000000")
-	Assert(numTransactions, n * m + 300)
-
-
+	Assert(curHash, "0000000000000000000000000000000000000000000000000000000000000000")//check it traces back to root
+	Assert(numTransactions, n * m + 300)//check the total number of transactions in the chain
 }
 
 func StartServers() {
