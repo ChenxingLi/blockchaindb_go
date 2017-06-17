@@ -5,12 +5,12 @@ import (
 	"io/ioutil"
 	"path"
 	pb "../protobuf/go"
-	"encoding/json"
 	"os"
 	"github.com/op/go-logging"
 	"container/list"
 	"bufio"
 	"io"
+	"github.com/golang/protobuf/jsonpb"
 )
 
 func saveBlock(js string) {
@@ -42,7 +42,7 @@ func saveTransactions(txs []*pb.Transaction, log *logging.Logger) {
 	} else {
 		defer file1.Close()
 		for _, tx := range txs {
-			if js, err := json.Marshal(tx); err == nil {
+			if js, err := pbMarshal.MarshalToString(tx); err == nil {
 				file1.Write([]byte("\n"))
 				file1.Write([]byte(js))
 			} else {
@@ -94,10 +94,11 @@ func loadTransactions() *list.List {
 			} else if len(line) <= 1 {
 				continue
 			} else {
-				js := []byte(line)
-				js = js[:len(js)-1]
+				js := line[:len(line)-1]
+				//js = js[:len(js)-1]
 				var tx pb.Transaction
-				err := json.Unmarshal(js, &tx)
+				//err := json.Unmarshal(js, &tx)
+				jsonpb.UnmarshalString(js, &tx)
 				if err == nil {
 					ans.PushBack(&tx)
 				}

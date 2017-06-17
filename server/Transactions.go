@@ -79,6 +79,7 @@ func (self *PendingTransactions) addTx(tx *pb.Transaction, log *logging.Logger) 
 
 		select {
 		case self.savechan <- tx :
+			log.Debug("Wake up petx")
 			self.saveAlarm.wake()
 		default:
 		}

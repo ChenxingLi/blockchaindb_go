@@ -56,6 +56,7 @@ func (self *AccountState) filterTxArray(input []*pb.Transaction, limit int, log 
 	tmpdata := AccountState{
 		data: make(map[string]int32),
 	}
+	selfplag := make(map[string]bool)
 	for key, value := range self.data {
 		tmpdata.data[key] = value
 	}
@@ -64,8 +65,9 @@ func (self *AccountState) filterTxArray(input []*pb.Transaction, limit int, log 
 	answer := make([]*pb.Transaction,0, int(limit/8))
 	for _, tx := range input {
 		//log.Debugf("From: %s, Value: %d, tx value: %d", tx.FromID, tmpdata.data[tx.FromID], tx.Value)
-		if tmpdata.afford_nosync(tx.FromID, tx.Value) {
+		if _, suc := selfplag[tx.UUID]; tmpdata.afford_nosync(tx.FromID, tx.Value) && !suc{
 			//log.Debug("So, append")
+			selfplag[tx.UUID] = true
 
 			answer = append(answer, tx)
 			if len(answer) == limit {
