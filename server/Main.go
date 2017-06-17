@@ -26,9 +26,8 @@ var communicationThreads = func() int {
 	}
 } ()
 var minerThreads = func() int {
-	return runtime.NumCPU()
-	if runtime.NumCPU() >= 8 {
-		return 3
+	if runtime.NumCPU() >= 5 {
+		return runtime.NumCPU() - 3
 	} else if runtime.NumCPU() >= 4 {
 		return 2
 	} else {

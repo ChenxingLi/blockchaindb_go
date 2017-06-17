@@ -272,7 +272,7 @@ func (self TxList) Swap(i, j int) {
 	self[i], self[j] = self[j], self[i]
 }
 func (self TxList) Less(i, j int) bool {
-	if self[i].MiningFee != self[i].MiningFee {
+	if self[i].MiningFee != self[j].MiningFee {
 		return self[i].MiningFee > self[j].MiningFee
 	} else {
 		return self[i].UUID > self[j].UUID

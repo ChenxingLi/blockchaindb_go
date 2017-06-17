@@ -93,7 +93,7 @@ func Assert(a, b interface{}) {
 }
 
 func Get(c pb.BlockChainMinerClient, UserID string) int {
-	if r, err := c.Get(context.Background(), &pb.GetRequest{UserID: UserID}); err != nil {
+	if r, err := c.Get(context.Background(), &pb.GetRequest{UserID: fill(UserID)}); err != nil {
 		log.Printf("GET Error: %v", err)
 		return -1
 	} else {
@@ -110,7 +110,7 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 	if r, err := c.Transfer(context.Background(), &pb.Transaction{
 		Type:   pb.Transaction_TRANSFER,
 		UUID:   UUID,
-		FromID: FromID, ToID: ToID, Value: int32(Value), MiningFee: int32(Fee)}); err != nil {
+		FromID: fill(FromID), ToID: fill(ToID), Value: int32(Value), MiningFee: int32(Fee)}); err != nil {
 		log.Printf("TRANSFER Error: %v", err)
 		return false, UUID
 	} else {
@@ -123,11 +123,18 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 	}
 }
 
+func fill(s string) string {
+	for len(s) < 8{
+		s += "."
+	}
+	return s
+}
+
 func Verify(c pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) *pb.VerifyResponse {
 	if r, err := c.Verify(context.Background(), &pb.Transaction{
 		Type:      pb.Transaction_TRANSFER,
-		FromID:    FromID,
-		ToID:      ToID,
+		FromID:    fill(FromID),
+		ToID:      fill(ToID),
 		Value:     Value,
 		MiningFee: Fee,
 		UUID:      UUID}); err != nil {
@@ -167,10 +174,13 @@ func GetBlock(c pb.BlockChainMinerClient, BlockHash string) string {
 
 func WaitForPending(client pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32, UUID string) bool {
 	for t := 0; t < 20; t++ {
-		result := Verify(client, FromID, ToID, Value, Fee, UUID).Result
-		if result.String() == "SUCCEEDED" {
+		result := Verify(client, FromID, ToID, Value, Fee, UUID)
+		if result.Result.String() == "SUCCEEDED" {
 			return true
-		} else if result.String() == "PENDING" {
+		} else if result.Result.String() == "PENDING" {
+			if result.BlockHash == "" {
+				time.Sleep(time.Second)
+			}
 			return true
 		} else {
 			time.Sleep(time.Second)
@@ -209,19 +219,20 @@ func BasicTest() {
 
 	note := make(chan int, 1)
 
-	//go func(c chan int) {
-	//	loop := true
-	//	for loop {
-	//		select {
-	//		case <-c:
-	//			loop = false
-	//		default:
-	//		}
-	//		//client := clients[rand.Int() % nservers]
-	//		client := clients[0]
-	//		_ = Verify(client, "a", "b", 2, 1, UUID128bit())
-	//	}
-	//}(note)
+	go func(c chan int) {
+		loop := true
+		for loop {
+			select {
+			case <-c:
+				loop = false
+			default:
+			}
+			//client := clients[rand.Int() % nservers]
+			client := clients[0]
+			_ = Verify(client, "a", "b", 2, 1, UUID128bit())
+			_ = GetHeight(client)
+		}
+	}(note)
 
 	n := 50
 	m := 30
@@ -234,8 +245,8 @@ func BasicTest() {
 			for i := 0; i < n*2; i += 2 {
 				//client := clients[rand.Int() % nservers]
 				client := clients[0]
-				name := fmt.Sprintf("a%03d", i)
-				_, UUIDs[j*2*n+i] = Transfer(client, name, "b", 2, 1)
+				name := fmt.Sprintf("a%03d", i/2)
+				_, UUIDs[j*2*n+i] = Transfer(client, name, "b", 3, 2)
 				_, UUIDs[j*2*n+i+1] = Transfer(client, name, "b", 1001, 1)
 			}
 			c <- true
@@ -252,15 +263,15 @@ func BasicTest() {
 	}
 	for i := 0; i < n; i++ {
 		name := fmt.Sprintf("a%03d", i)
-		Assert(Get(clients[rand.Int()%nservers], name), 1000-2*m)
+		Assert(Get(clients[rand.Int()%nservers], name), 1000-3*m)
 	}
 	for i := 0; i < n*m*2; i += 2 {
-		name := fmt.Sprintf("a%03d", i%n)
-		result := Verify(clients[rand.Int()%nservers], name, "b", 2, 1, UUIDs[i]).Result.String()
+		name := fmt.Sprintf("a%03d", (i/2)%n)
+		result := Verify(clients[rand.Int()%nservers], name, "b", 3, 2, UUIDs[i]).Result.String()
 		Assert(result, "SUCCEEDED")
-		result = Verify(clients[rand.Int()%nservers], name, "b", 2, 1, UUIDs[i+1]).Result.String()
+		result = Verify(clients[rand.Int()%nservers], name, "b", 1001, 1, UUIDs[i+1]).Result.String()
 		Assert(result, "FAILED")
-		result = Verify(clients[rand.Int()%nservers], name, "bb", 2, 1, UUIDs[i]).Result.String()
+		result = Verify(clients[rand.Int()%nservers], name, "bb", 2, 2, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
 		result = Verify(clients[rand.Int()%nservers], name, "b", 3, 1, UUIDs[i]).Result.String()
 		Assert(result, "FAILED")
@@ -273,14 +284,13 @@ func BasicTest() {
 	}
 	fmt.Println(sum)
 	//check the mining fee
-	Assert(sum >= n*m, true)
-	Assert(sum <= n*m+300, true)
+	Assert(sum == 2*n*m+300, true)
 
 	response := GetHeight(clients[0])
 	height, leafHash := int(response.Height), response.LeafHash
 	fmt.Println(height)
 
-	Assert(height >= m+5, true) //check the length of longest chain
+	Assert(height >= m +5, true) //check the length of longest chain
 
 	//var prevHash string
 	numTransactions := 0
@@ -337,6 +347,7 @@ func main() {
 	BasicTest()
 
 	ShutServers()
+	ClearData()
 
 	fmt.Println("================================================================")
 	fmt.Println(fmt.Sprintf("Pass %d/%d tests", passed_test, total_test))
