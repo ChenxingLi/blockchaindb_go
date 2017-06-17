@@ -103,6 +103,7 @@ func Get(c pb.BlockChainMinerClient, UserID string) int {
 
 func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int32, Fee int32) (bool, string) {
 	UUID := UUID128bit()
+	//start := time.Now()
 	if r, err := c.Transfer(context.Background(), &pb.Transaction{
 		Type:   pb.Transaction_TRANSFER,
 		UUID:   UUID,
@@ -113,6 +114,8 @@ func Transfer(c pb.BlockChainMinerClient, FromID string, ToID string, Value int3
 		if debug {
 			log.Printf("TRANSFER Return: %v", r.Success)
 		}
+		//elapsed := time.Since(start)
+		//log.Printf("Transfer took %s", elapsed)
 		return r.Success, UUID
 	}
 }
@@ -243,10 +246,20 @@ func BasicTest() {
 	Assert(sum <= n * m + 300, true)
 
 	response := GetHeight(clients[0])
-	height, leafHash := response.Height, response.LeafHash
+	height, leafHash := int(response.Height), response.LeafHash
 	fmt.Println(height)
-	_ = leafHash
-	Assert(int(height) >= m + 5, true)
+	Assert(height >= m + 5, true)
+
+	//var prevHash string
+	curHash := leafHash
+	for i := 0; i < height; i++{
+		fmt.Println(curHash)
+		blockString := GetBlock(clients[rand.Int() % nservers], curHash)
+		var block pb.Block
+		json.Unmarshal([]byte(blockString), &block)
+		curHash = block.PrevHash
+		Assert(block.BlockID, height)
+	}
 }
 
 func StartServers() {
