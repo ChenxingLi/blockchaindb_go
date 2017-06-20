@@ -16,5 +16,5 @@
 		"dataDir":"/tmp/os_blockchain/server03/"
 	},
 	"nservers":3,
-	"loglevel":"NONE"
+	"loglevel":"WARNING"
 }

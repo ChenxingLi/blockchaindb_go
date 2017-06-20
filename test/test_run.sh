@@ -6,6 +6,9 @@
 
 # Please start this script in a clean environment; i.e. the server is not running, and the data dir is empty.
 
+go run test.go
+
+return
 
 echo "Testrun starting..."
 

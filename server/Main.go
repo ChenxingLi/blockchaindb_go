@@ -89,7 +89,10 @@ func loadConfig() {
 
 	nserver = int(dat["nservers"].(float64))
 
-	if lv, err := logging.LogLevel(dat["loglevel"].(string)); err == nil {
+	loglv, ok := dat["loglevel"].(string)
+	if !ok {
+		loadLogger(loglevel)
+	} else if lv, err := logging.LogLevel(loglv); err == nil {
 		loadLogger(lv)
 	} else {
 		loadLogger(loglevel)
