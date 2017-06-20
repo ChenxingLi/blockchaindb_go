@@ -15,6 +15,5 @@
 		"port":"50053",
 		"dataDir":"/tmp/os_blockchain/server03/"
 	},
-	"nservers":3,
-	"loglevel":"WARNING"
+	"nservers":3
 }
